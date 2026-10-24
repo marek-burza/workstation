@@ -353,7 +353,6 @@ def transcribe_worker(
         text = transcribe(chunk.data)
         if text:
             line = f"[{chunk.origin}] {text}" if multi_source else text
-            print(line)
             transcript.add(line)
 
 
