@@ -7,7 +7,9 @@
 
 - name: Tools - Myna Repository
   ansible.builtin.apt_repository:
-    repo: "deb [signed-by=/etc/apt/keyrings/myna.asc] https://ppa.launchpadcontent.net/canonical-desktop-team/myna/ubuntu {{ lookup('ansible.builtin.pipe', 'lsb_release -cs') }} main"
+    repo: >-
+      deb [signed-by=/etc/apt/keyrings/myna.asc] https://ppa.launchpadcontent.net/canonical-desktop-team/myna/ubuntu
+      {{ lookup('ansible.builtin.pipe', 'lsb_release -cs') }} main
     filename: myna
     state: present
 
