@@ -2,8 +2,8 @@
 # /// script
 # requires-python = ">=3.12"
 # dependencies = [
+#     "dbus-fast",
 #     "numpy",
-#     "pillow",
 #     "pytest",
 #     "torch",
 #     "transformers",
@@ -19,13 +19,17 @@
 # - ML/AI architecture interview - https://claude.ai/new?q=%2Fimla
 # - ML/AI architecture interview (short) - https://claude.ai/new?q=%2Fimlas
 
+import asyncio
 import collections
 import dataclasses
 import enum
 import logging
 import queue
+import shutil
 import subprocess  # nosec B404
 import threading
+import urllib.parse
+import uuid
 import warnings
 from pathlib import Path
 from typing import Annotated, Any, cast
@@ -33,7 +37,8 @@ from typing import Annotated, Any, cast
 import numpy as np
 import torch
 import typer
-from PIL import ImageGrab
+from dbus_fast import Message, MessageType, Variant
+from dbus_fast.aio import MessageBus
 from transformers import (
     WhisperForConditionalGeneration,
     WhisperProcessor,
@@ -432,19 +437,101 @@ def speech_segments(audio: np.ndarray, vad: VadAccumulator) -> list[np.ndarray]:
     return segments
 
 
+def checked_reply(reply: Message) -> Message:
+    if reply.message_type == MessageType.ERROR:
+        raise RuntimeError(f"{reply.error_name}: {reply.body}")
+    return reply
+
+
+async def subscribe_to_response(bus: MessageBus, request: str) -> None:
+    rule = (
+        "type='signal',interface='org.freedesktop.portal.Request',"
+        f"member='Response',path='{request}'"
+    )
+    checked_reply(
+        await bus.call(
+            Message(
+                destination="org.freedesktop.DBus",
+                path="/org/freedesktop/DBus",
+                interface="org.freedesktop.DBus",
+                member="AddMatch",
+                signature="s",
+                body=[rule],
+            )
+        )
+    )
+
+
+async def take_screenshot(bus: MessageBus) -> Path:
+    token = f"transcriptor_{uuid.uuid4().hex}"
+    sender = cast(str, bus.unique_name).lstrip(":").replace(".", "_")
+    request = f"/org/freedesktop/portal/desktop/request/{sender}/{token}"
+    response: asyncio.Future[list[Any]] = asyncio.get_running_loop().create_future()
+
+    def on_message(message: Message) -> None:
+        responded = message.path == request and message.member == "Response"
+        if responded and not response.done():
+            response.set_result(message.body)
+
+    await subscribe_to_response(bus, request)
+    bus.add_message_handler(on_message)
+    try:
+        checked_reply(
+            await bus.call(
+                Message(
+                    destination="org.freedesktop.portal.Desktop",
+                    path="/org/freedesktop/portal/desktop",
+                    interface="org.freedesktop.portal.Screenshot",
+                    member="Screenshot",
+                    signature="sa{sv}",
+                    body=[
+                        "",
+                        {
+                            "interactive": Variant("b", False),
+                            "handle_token": Variant("s", token),
+                        },
+                    ],
+                )
+            )
+        )
+        code, results = await response
+    finally:
+        bus.remove_message_handler(on_message)
+    if code != 0:
+        raise RuntimeError(f"Screenshot was refused (response {code})")
+    uri = results["uri"].value
+    return Path(urllib.parse.unquote(urllib.parse.urlparse(uri).path))
+
+
+def save_screenshot(screenshot: Path, path: Path) -> None:
+    partial = path.with_name(f".{path.stem}.partial{path.suffix}")
+    shutil.move(screenshot, partial)
+    partial.replace(path)
+
+
+async def record_screenshots(
+    path: Path,
+    exit: threading.Event,
+    interval: float,
+) -> None:
+    bus = await MessageBus().connect()
+    try:
+        while not exit.is_set():
+            try:
+                save_screenshot(await take_screenshot(bus), path)
+            except (OSError, RuntimeError) as e:
+                print(f"Screen capture error: {e}")
+            await asyncio.to_thread(exit.wait, interval)
+    finally:
+        bus.disconnect()
+
+
 def screen_worker(
     path: Path,
     exit: threading.Event,
     interval: float,
 ) -> None:
-    while not exit.is_set():
-        try:
-            partial = path.with_name(f".{path.stem}.partial{path.suffix}")
-            ImageGrab.grab().save(partial)
-            partial.replace(path)
-        except OSError as e:
-            print(f"Screen capture error: {e}")
-        exit.wait(interval)
+    asyncio.run(record_screenshots(path, exit, interval))
 
 
 RCLONE_REMOTE = "transcriptor"
@@ -476,12 +563,17 @@ def ensure_rclone_remote() -> None:
 
 
 def upload(path: Path) -> bool:
-    result = subprocess.run(  # nosec B603 B607
-        ["rclone", "copyto", str(path), f"{RCLONE_REMOTE}:{path.name}"],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    snapshot = path.with_name(f".{path.stem}.upload{path.suffix}")
+    shutil.copyfile(path, snapshot)
+    try:
+        result = subprocess.run(  # nosec B603 B607
+            ["rclone", "copyto", str(snapshot), f"{RCLONE_REMOTE}:{path.name}"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    finally:
+        snapshot.unlink()
     if result.returncode != 0:
         print(f"Sync error for {path.name}: {result.stderr.strip().splitlines()[-1:]}")
     return result.returncode == 0
