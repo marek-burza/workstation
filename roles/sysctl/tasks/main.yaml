@@ -1,0 +1,10 @@
+---
+- name: Sysctl - Hardening
+  ansible.posix.sysctl:
+    name: "{{ item.name }}"
+    value: "{{ item.value }}"
+    sysctl_file: /etc/sysctl.d/60-hardening.conf
+  loop:
+    - { name: kernel.kptr_restrict, value: "2" }
+    - { name: kernel.dmesg_restrict, value: "1" }
+    - { name: kernel.yama.ptrace_scope, value: "1" }
