@@ -9,6 +9,7 @@ This is a set of Ansible scripts to automate:
 - Installation of NVIDIA GPU support. Based on instructions for installing the [drivers](https://docs.nvidia.com/datacenter/tesla/driver-installation-guide/index.html) and [container toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html#installing-with-apt).
 - Removal of insecure CUPS
 - Disabling swap
+- Kernel hardening (`sysctl`)
 
 ## Prerequisites
 
@@ -30,5 +31,4 @@ Caution: Put it at user level so it runs from the home directory, never from ins
 
 ## To Do
 
-- [How to secure anything](https://github.com/veeral-patel/how-to-secure-anything)
 - KeePassXC in air-gapped and encrypted VM

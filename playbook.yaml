@@ -10,6 +10,7 @@
     - role: podman
     - role: nvidia
     - role: swap
+    - role: sysctl
     - role: uv
     - role: fonts
     - role: sounds

@@ -10,8 +10,11 @@
 - name: Podman - Docker Hub
   ansible.builtin.lineinfile:
     path: /etc/containers/registries.conf
-    line: 'unqualified-search-registries = ["docker.io"]'
+    line: "{{ item }}"
     state: present
+  loop:
+    - 'unqualified-search-registries = ["docker.io"]'
+    - 'short-name-mode = "enforcing"'
 
 - name: Podman - Prune
   ansible.builtin.cron:

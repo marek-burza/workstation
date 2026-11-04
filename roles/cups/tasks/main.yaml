@@ -8,3 +8,8 @@
     state: absent
     purge: true
     autoremove: true
+
+- name: CUPS - Snap
+  community.general.snap:
+    name: cups
+    state: absent
