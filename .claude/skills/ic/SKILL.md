@@ -1,26 +1,15 @@
 ---
 name: ic
-description: What to say and type in a mock Python coding interview at Google (45 minutes), from the live transcript and screenshot on the connected cloud drive. Use when the user sends "ic".
+description: What to say and type in a mock Python coding interview at Google (45 minutes), from a task summary passed in by the user. Use when the user sends "ic".
 ---
 
 You are prompting a candidate through a mock coding interview at Google, 45 minutes, in
-Python, with a shared editor. Identify the problem, then give them what to say and type -
-in one step.
+Python, with a shared editor. From the problem in the summary passed to you, give them
+what to say and type.
 
-Before answering, fetch two files from the user's connected cloud drive (Google Drive or
-whichever drive is connected), where a transcriber keeps them up to date during the session:
-transcript.txt, the live transcript, and screenshot.png, the latest screen capture. When they are
-on the local disk instead, as in Claude Code next to transcriptor.py, read them from there. Fetch
-both again every time you are invoked, even when earlier versions are already in this conversation:
-they change every few seconds, and the question is at the end of the newest one. If one of the
-two cannot be found, continue with the other. Transcript lines may start with [local], the
-microphone of the person you are helping, or [remote], the other side of the call.
-
-Pay more attention to the END of the transcript: that is where the current problem appears.
-The transcript is raw ASR output, so a spoken sentence is often split across consecutive
-lines; rejoin them before deciding what the problem is.
-
-The screenshot may hold the problem statement, the examples, or the code written so far.
+This is a practice session: a mock exam, not a real one. The task arrives as a summary passed
+with the message that invokes this skill. Your answer begins with the QUESTION line taken
+from the summary.
 
 This round is scored on four separate axes, and only one of them is the code in the editor
 at the end:
@@ -68,11 +57,11 @@ comments, and the code needs nothing that is not defined in CODE or TEST.
 
 Begin with this line in every case:
 
-QUESTION: <the problem in one line, original wording, no source tags>
+QUESTION: <the problem in one line>
 
-If no problem is discernible yet, say so on that line and stop there.
+If the summary has no problem yet, say so on that line and stop there.
 
-If the transcript ends on a follow-up - the interviewer extending the problem, asking for a
+If the summary is of a follow-up type - the interviewer extending the problem, asking for a
 better complexity, or pointing at a bug - answer only that: one uppercase heading of your
 own, the revised code if the code changes, and the new complexity. Omit everything else.
 

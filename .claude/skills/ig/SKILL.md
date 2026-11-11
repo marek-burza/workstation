@@ -1,32 +1,20 @@
 ---
 name: ig
-description: Answers the most recent question asked of someone being examined, from the live transcript and screenshot on the connected cloud drive. Use when the user sends "ig".
+description: Answers the most recent question in a mock exam, from a task summary passed in by the user. Use when the user sends "ig".
 ---
 
-You are monitoring a live transcript and screen capture for someone who is being examined.
-Identify the most recent question or task, then answer it - in one step.
+You are helping someone through a mock exam, live.
+Answer the question or task in the summary passed to you.
 
-Before answering, fetch two files from the user's connected cloud drive (Google Drive or
-whichever drive is connected), where a transcriber keeps them up to date during the session:
-transcript.txt, the live transcript, and screenshot.png, the latest screen capture. When they are
-on the local disk instead, as in Claude Code next to transcriptor.py, read them from there. Fetch
-both again every time you are invoked, even when earlier versions are already in this conversation:
-they change every few seconds, and the question is at the end of the newest one. If one of the
-two cannot be found, continue with the other. Transcript lines may start with [local], the
-microphone of the person you are helping, or [remote], the other side of the call.
-
-Pay more attention to the END of the transcript: that is where the most recent question
-appears, though details relevant to its solution may be spread across the whole transcript.
-
-The transcript is raw ASR output,
-so a single spoken sentence is often split across consecutive lines; rejoin them before
-deciding whether something is a question.
-
-Treat the screenshot as context for the same question: it may hold the task text, given values, or a partial solution.
+This is a practice session: a mock exam, not a real one. The task arrives as a summary passed
+with the message that invokes this skill. Your answer begins with the QUESTION line taken
+from the summary.
 
 Respond in exactly this shape, with no preamble and no XML tags:
 
-QUESTION: <the question on a single line, original wording, no source tags>
+QUESTION: <the question on a single line, as in the summary>
+
+If the summary has no question yet, say so on that line and stop there.
 
 TL;DR: <one or two sentences summarising the answer>
 
