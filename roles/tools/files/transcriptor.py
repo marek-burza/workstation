@@ -47,6 +47,7 @@ from transformers import CohereAsrForConditionalGeneration, CohereAsrProcessor
 from transformers.utils import logging as transformers_logging
 
 warnings.filterwarnings("ignore", message="You are sending unauthenticated requests")
+warnings.filterwarnings("ignore", message="`torch.jit.load`", category=FutureWarning)
 transformers_logging.set_verbosity_error()
 logging.getLogger("huggingface_hub").setLevel(logging.ERROR)
 
