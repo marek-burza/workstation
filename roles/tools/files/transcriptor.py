@@ -2,11 +2,14 @@
 # /// script
 # requires-python = ">=3.12"
 # dependencies = [
+#     "accelerate",
 #     "dbus-fast",
+#     "librosa",
 #     "numpy",
 #     "pytest",
+#     "silero-vad",
 #     "torch",
-#     "transformers",
+#     "transformers>=5.4",
 #     "typer",
 # ]
 # ///
@@ -39,17 +42,10 @@ import torch
 import typer
 from dbus_fast import Message, MessageType, Variant
 from dbus_fast.aio import MessageBus
-from transformers import (
-    WhisperForConditionalGeneration,
-    WhisperProcessor,
-    pipeline,
-)
+from silero_vad import load_silero_vad  # type: ignore[import-untyped]
+from transformers import CohereAsrForConditionalGeneration, CohereAsrProcessor
 from transformers.utils import logging as transformers_logging
 
-warnings.filterwarnings("ignore", message="A custom logits processor of type")
-warnings.filterwarnings(
-    "ignore", message="You seem to be using the pipelines sequentially on GPU"
-)
 warnings.filterwarnings("ignore", message="You are sending unauthenticated requests")
 transformers_logging.set_verbosity_error()
 logging.getLogger("huggingface_hub").setLevel(logging.ERROR)
@@ -67,47 +63,83 @@ class Source(str, enum.Enum):
     ALL = "all"
 
 
-WHISPER_HUGGINGFACE_ID = "openai/whisper-large-v3"
-WHISPER_REVISION = "06f233fe06e710322aca913c1bc4249a0d71fce1"
+COHERE_HUGGINGFACE_ID = "CohereLabs/cohere-transcribe-03-2026"
+COHERE_REVISION = "d552dadc2922ba6f6c1f994f8db904d52dcaf942"
+LANGUAGE = "en"
+MAX_NEW_TOKENS = 256
 
 
-class WhisperTranscriber:
+class CohereTranscriber:
     def __init__(
         self, model_id: str, revision: str, device: str, dtype: torch.dtype
     ) -> None:
-        asr_model = WhisperForConditionalGeneration.from_pretrained(
-            model_id,
-            revision=revision,
-            torch_dtype=dtype,
-            low_cpu_mem_usage=True,
-            use_safetensors=True,
+        self._device = device
+        self._dtype = dtype
+        self._processor = CohereAsrProcessor.from_pretrained(
+            model_id, revision=revision
         )
-        processor = WhisperProcessor.from_pretrained(model_id, revision=revision)
-        self._pipe = pipeline(
-            "automatic-speech-recognition",
-            model=asr_model,
-            tokenizer=processor.tokenizer,
-            feature_extractor=processor.feature_extractor,
-            dtype=dtype,
-            device=device,
-            batch_size=1,
-            generate_kwargs={
-                "language": "en",
-                "task": "transcribe",
-                "no_repeat_ngram_size": 3,
-            },
+        self._model = CohereAsrForConditionalGeneration.from_pretrained(
+            model_id, revision=revision, dtype=dtype, device_map=device
+        ).eval()
+
+    @torch.inference_mode()
+    def __call__(self, audio: np.ndarray) -> str:
+        inputs = self._processor(
+            audio, sampling_rate=SAMPLE_RATE, return_tensors="pt", language=LANGUAGE
         )
+        inputs.to(self._device, dtype=self._dtype)
+        outputs = self._model.generate(**inputs, max_new_tokens=MAX_NEW_TOKENS)
+        return self._processor.decode(outputs, skip_special_tokens=True)[0].strip()
+
+
+SILERO_SAMPLES = 512
+SILENT_PEAK = 0.2
+SILENT_MEAN = 0.1
+SHORT_TEXT_WORDS = 2
+
+
+def has_latin_letter(text: str) -> bool:
+    return any(character.isascii() and character.isalpha() for character in text)
+
+
+def is_plausible(speech: np.ndarray, text: str) -> bool:
+    if not len(speech) or speech.max() < SILENT_PEAK:
+        return False
+    if speech.mean() < SILENT_MEAN and len(text.split()) <= SHORT_TEXT_WORDS:
+        return False
+    return has_latin_letter(text)
+
+
+class SpeechGate:
+    def __init__(self) -> None:
+        self._model = load_silero_vad()
+
+    @torch.inference_mode()
+    def speech_probabilities(self, audio: np.ndarray) -> np.ndarray:
+        self._model.reset_states()
+        usable = len(audio) // SILERO_SAMPLES * SILERO_SAMPLES
+        frames = torch.from_numpy(audio[:usable]).split(SILERO_SAMPLES)
+        return np.array([float(self._model(frame, SAMPLE_RATE)) for frame in frames])
+
+
+class GatedTranscriber:
+    def __init__(self, transcribe: CohereTranscriber, gate: SpeechGate) -> None:
+        self._transcribe = transcribe
+        self._gate = gate
 
     def __call__(self, audio: np.ndarray) -> str:
-        output = cast(dict[str, Any], self._pipe(audio))
-        return output["text"].strip()
+        text = self._transcribe(audio)
+        if text and is_plausible(self._gate.speech_probabilities(audio), text):
+            return text
+        return ""
 
 
-def load_transcriber() -> WhisperTranscriber:
+def load_transcriber() -> GatedTranscriber:
     print("Loading model...")
     device = "cuda:0" if torch.cuda.is_available() else "cpu"
-    dtype = torch.float16 if torch.cuda.is_available() else torch.float32
-    return WhisperTranscriber(WHISPER_HUGGINGFACE_ID, WHISPER_REVISION, device, dtype)
+    dtype = torch.bfloat16 if torch.cuda.is_available() else torch.float32
+    cohere = CohereTranscriber(COHERE_HUGGINGFACE_ID, COHERE_REVISION, device, dtype)
+    return GatedTranscriber(cohere, SpeechGate())
 
 
 @dataclasses.dataclass
@@ -151,10 +183,9 @@ than reaching for a model: a threshold that rises with the room's noise floor, a
 pre-speech padding, so a segment does not begin midway through its first word.
 
 The remaining weakness is inherent to measuring energy: RMS cannot tell speech from any
-other sound at the same level, so a slammed door in a quiet room still reaches Whisper.
-A drop-in replacement using `silero-vad` (~1.8 MB JIT model, sub-ms inference per 32 ms
-frame) would keep the same feed/flush contract (with the window fixed to 512 samples,
-Silero's 16 kHz requirement, and the RMS check replaced with model inference).
+other sound at the same level, so a slammed door in a quiet room still reaches the
+model. SpeechGate catches that after the fact, rather than Silero replacing the RMS
+check here.
 """
 
 FRAME_MS = 20
@@ -162,13 +193,14 @@ MIN_SPEECH_MS = 300
 
 # The threshold is a fixed minimum, raised to a multiple of the measured noise floor
 # when the room is louder than that allows. Too low for the room and every frame reads
-# as speech, so segments only ever end at the cap and Whisper is handed 15 s of noise -
-# which it does not return empty for, it hallucinates straight into the transcript.
+# as speech, so segments only ever end at the cap and the model is handed seconds of
+# noise - which it does not return empty for, it hallucinates straight into the
+# transcript.
 #
 # It never drops below MIN_THRESHOLD, and there is one threshold rather than a lower one
 # for keeping a segment open. Both were tried: a lower hold level lets a remote voice
 # picked up from the speakers bridge the pause between turns, so an utterance runs on
-# into the other speaker until the cap cuts it mid-word, and Whisper loops on exactly
+# into the other speaker until the cap cuts it mid-word, and the model loops on exactly
 # that audio ("sad, sad, sad, ...") to the end of its token budget.
 MIN_THRESHOLD = 0.008
 NOISE_MULTIPLE = 3
@@ -184,20 +216,21 @@ FLOOR_RISE = 0.002
 
 # A pause only ends a segment once it holds MIN_EMIT_MS of speech; below that the
 # segment stays open until LONG_SILENCE_MS, so a fragment joins the utterance next to it
-# instead of being decoded alone - Whisper returns a plausible wrong word for a one-word
-# segment.
+# instead of being decoded alone - the model returns a plausible wrong word for a
+# one-word segment.
 MIN_SILENCE_MS = 600
 MIN_EMIT_MS = 700
 LONG_SILENCE_MS = 2000
 
 # A cap rather than a preference: without it, someone talking continuously produces no
-# transcript until they pause, and the segment would run past Whisper's 30 s window.
-MAX_SPEECH_MS = 15000
+# transcript until they pause, and the segment would run past the model's 35 s window.
+MAX_SPEECH_MS = 30000
+SOFT_SPEECH_MS = 15000
+SHORT_PAUSE_MS = 160
 
 # Audio kept from before the threshold was crossed. Word onsets are quiet, so a segment
-# that starts at the crossing starts inside its first word, and Whisper guesses a
-# plausible word there. Free at inference time, since Whisper pads every input to 30 s
-# regardless.
+# that starts at the crossing starts inside its first word, and the model guesses a
+# plausible word there.
 PAD_MS = 240
 
 
@@ -210,13 +243,17 @@ class VadAccumulator:
         min_emit_ms: int = MIN_EMIT_MS,
         long_silence_ms: int = LONG_SILENCE_MS,
         max_speech_ms: int = MAX_SPEECH_MS,
+        soft_speech_ms: int = SOFT_SPEECH_MS,
+        short_pause_ms: int = SHORT_PAUSE_MS,
     ) -> None:
         self.frame_samples = SAMPLE_RATE * frame_ms // 1000
         self._min_silence_frames = min_silence_ms // frame_ms
         self._min_speech_frames = min_speech_ms // frame_ms
         self._min_emit_frames = min_emit_ms // frame_ms
         self._long_silence_frames = long_silence_ms // frame_ms
+        self._short_pause_frames = short_pause_ms // frame_ms
         self._max_speech_samples = int(max_speech_ms / 1000 * SAMPLE_RATE)
+        self._soft_speech_samples = int(soft_speech_ms / 1000 * SAMPLE_RATE)
         self._buffer: list[np.ndarray] = []
         self._buffered = 0
         self._speech_frames = 0
@@ -256,16 +293,18 @@ class VadAccumulator:
         elif self._in_speech:
             self._append(frame)
             self._silence_frames += 1
-            enough = (
-                self._min_silence_frames
-                if self._speech_frames >= self._min_emit_frames
-                else self._long_silence_frames
-            )
-            if self._silence_frames >= enough:
+            if self._silence_frames >= self._silence_to_end():
                 return self.flush()
         else:
             self._pad.append(frame)
         return None
+
+    def _silence_to_end(self) -> int:
+        if self._buffered >= self._soft_speech_samples:
+            return self._short_pause_frames
+        if self._speech_frames >= self._min_emit_frames:
+            return self._min_silence_frames
+        return self._long_silence_frames
 
     def flush(self) -> np.ndarray | None:
         segment: np.ndarray | None = None
@@ -346,7 +385,7 @@ def default_speaker_device(sources: list[Device], override: int | None) -> str:
 
 
 def transcribe_worker(
-    transcribe: WhisperTranscriber,
+    transcribe: GatedTranscriber,
     multi_source: bool,
     audio: queue.Queue[AudioChunk | None],
     transcript: TranscriptFile,
@@ -944,6 +983,26 @@ class TestVadAccumulator:
         assert learned_after is not None
         assert 0 < learned_after < 15
 
+    def _talk(self, vad: VadAccumulator, phrases: int) -> np.ndarray | None:
+        for _ in range(phrases):
+            for frame, count in [(self._speech(), 15), (self._silence(), 3)]:
+                segment = self._first(vad, frame, count)
+                if segment is not None:
+                    return segment
+        return None
+
+    def test_short_pause_ends_long_speech(self):
+        vad = VadAccumulator()
+        assert self._talk(vad, 45) is None
+        segment = self._first(vad, self._silence(), SHORT_PAUSE_MS // FRAME_MS)
+        assert segment is not None
+        assert len(segment) >= 45 * 18 * self._FRAME_SAMPLES
+
+    def test_short_pause_keeps_shorter_speech_open(self):
+        vad = VadAccumulator()
+        assert self._talk(vad, 20) is None
+        assert self._first(vad, self._silence(), SHORT_PAUSE_MS // FRAME_MS) is None
+
     def test_unbroken_speech_does_not_go_deaf(self):
         vad = VadAccumulator()
         kept = 0
@@ -957,6 +1016,38 @@ class TestVadAccumulator:
         if tail is not None:
             kept += len(tail)
         assert kept / SAMPLE_RATE > 58
+
+
+class TestIsPlausible:
+    def test_rejects_segment_without_speech(self):
+        assert not is_plausible(np.full(100, 0.1), "Thank you for watching.")
+
+    def test_rejects_empty_segment(self):
+        assert not is_plausible(np.array([]), "Thank you.")
+
+    def test_rejects_short_text_over_mostly_silence(self):
+        speech = np.zeros(100)
+        speech[:3] = 0.9
+        assert not is_plausible(speech, "Thank you.")
+
+    def test_keeps_long_text_over_quiet_speech(self):
+        speech = np.zeros(100)
+        speech[:3] = 0.9
+        assert is_plausible(speech, "They're focused on supply chain software.")
+
+    def test_keeps_short_text_over_speech(self):
+        assert is_plausible(np.full(100, 0.9), "Okay.")
+
+    def test_rejects_text_without_latin_letters(self):
+        assert not is_plausible(np.full(100, 0.9), "好")
+
+
+class TestSpeechGate:
+    def test_silence_has_no_speech(self):
+        gate = SpeechGate()
+        speech = gate.speech_probabilities(np.zeros(SAMPLE_RATE, dtype=np.float32))
+        assert len(speech) == SAMPLE_RATE // SILERO_SAMPLES
+        assert speech.max() < SILENT_PEAK
 
 
 # Frequently used:
