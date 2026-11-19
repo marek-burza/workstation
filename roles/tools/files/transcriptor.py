@@ -58,17 +58,34 @@ class Source(str, enum.Enum):
     ALL = "all"
 
 
+class Language(str, enum.Enum):
+    GERMAN = "de"
+    ENGLISH = "en"
+    SPANISH = "es"
+    FRENCH = "fr"
+    ITALIAN = "it"
+    DUTCH = "nl"
+    POLISH = "pl"
+    PORTUGUESE = "pt"
+    VIETNAMESE = "vi"
+
+
 COHERE_HUGGINGFACE_ID = "CohereLabs/cohere-transcribe-03-2026"
 COHERE_REVISION = "d552dadc2922ba6f6c1f994f8db904d52dcaf942"
-LANGUAGE = "en"
 MAX_NEW_TOKENS = 256
 
 
 class CohereTranscriber:
     def __init__(
-        self, model_id: str, revision: str, device: str, dtype: torch.dtype
+        self,
+        model_id: str,
+        revision: str,
+        device: str,
+        dtype: torch.dtype,
+        language: Language,
     ) -> None:
         self._device = device
+        self._language = language
         self._dtype = dtype
         self._processor = CohereAsrProcessor.from_pretrained(
             model_id, revision=revision
@@ -80,7 +97,10 @@ class CohereTranscriber:
     @torch.inference_mode()
     def __call__(self, audio: np.ndarray) -> str:
         inputs = self._processor(
-            audio, sampling_rate=SAMPLE_RATE, return_tensors="pt", language=LANGUAGE
+            audio,
+            sampling_rate=SAMPLE_RATE,
+            return_tensors="pt",
+            language=self._language.value,
         )
         inputs.to(self._device, dtype=self._dtype)
         outputs = self._model.generate(**inputs, max_new_tokens=MAX_NEW_TOKENS)
@@ -129,11 +149,13 @@ class GatedTranscriber:
         return ""
 
 
-def load_transcriber() -> GatedTranscriber:
+def load_transcriber(language: Language) -> GatedTranscriber:
     print("Loading model...")
     device = "cuda:0" if torch.cuda.is_available() else "cpu"
     dtype = torch.bfloat16 if torch.cuda.is_available() else torch.float32
-    cohere = CohereTranscriber(COHERE_HUGGINGFACE_ID, COHERE_REVISION, device, dtype)
+    cohere = CohereTranscriber(
+        COHERE_HUGGINGFACE_ID, COHERE_REVISION, device, dtype, language
+    )
     return GatedTranscriber(cohere, SpeechGate())
 
 
@@ -570,6 +592,14 @@ def screen_worker(
 
 app = typer.Typer(no_args_is_help=True)
 
+LanguageOption = Annotated[
+    Language,
+    typer.Option(
+        "--language",
+        help="Language spoken in the audio. Cohere has no language detection.",
+    ),
+]
+
 
 @app.command()
 def devices() -> None:
@@ -589,6 +619,7 @@ def live(
             "screen or all.",
         ),
     ] = Source.AUDIO,
+    language: LanguageOption = Language.ENGLISH,
     microphone_device: Annotated[
         int | None,
         typer.Option(
@@ -661,7 +692,7 @@ def live(
         )
 
     if capture_devices:
-        transcribe = load_transcriber()
+        transcribe = load_transcriber(language)
         threads.append(
             threading.Thread(
                 target=transcribe_worker,
@@ -727,6 +758,7 @@ def recorded(
             "Overwritten.",
         ),
     ] = Path("transcript.txt"),
+    language: LanguageOption = Language.ENGLISH,
     min_silence_ms: Annotated[
         int,
         typer.Option(
@@ -744,7 +776,7 @@ def recorded(
     ] = MAX_SPEECH_MS,
 ) -> None:
     """Transcribe a recording made elsewhere."""
-    transcribe = load_transcriber()
+    transcribe = load_transcriber(language)
     print(f"Transcribing {recording}...")
     vad = VadAccumulator(min_silence_ms=min_silence_ms, max_speech_ms=max_speech_ms)
     transcript = TranscriptFile(transcript_path)
