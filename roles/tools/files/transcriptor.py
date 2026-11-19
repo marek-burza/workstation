@@ -14,13 +14,7 @@
 # ]
 # ///
 # Records a live transcript of the microphone and/or speaker audio to a text file, and
-# refreshes a screenshot file at an interval, optionally copying both to Google Drive.
-# - Generic interview - https://claude.ai/new?q=%2Fig
-# - Coding interview - https://claude.ai/new?q=%2Fic
-# - System design interview - https://claude.ai/new?q=%2Fisd
-# - ML/AI coding interview - https://claude.ai/new?q=%2Fimlc
-# - ML/AI architecture interview - https://claude.ai/new?q=%2Fimla
-# - ML/AI architecture interview (short) - https://claude.ai/new?q=%2Fimlas
+# refreshes a screenshot file at an interval.
 
 import asyncio
 import collections
@@ -574,77 +568,6 @@ def screen_worker(
     asyncio.run(record_screenshots(path, exit, interval))
 
 
-RCLONE_REMOTE = "transcriptor"
-# drive.file: rclone sees only the files it uploaded itself, not the rest of the Drive.
-RCLONE_DRIVE_SCOPE = "drive.file"
-# The last sync pass runs on Ctrl+C, and an upload takes longer than the 1 s other
-# threads get.
-SYNC_STOP_TIMEOUT = 15.0
-
-
-def ensure_rclone_remote() -> None:
-    remotes = subprocess.run(  # nosec B603 B607
-        ["rclone", "listremotes"], capture_output=True, text=True, check=True
-    ).stdout.split()
-    if f"{RCLONE_REMOTE}:" in remotes:
-        return
-    print(f'No rclone remote "{RCLONE_REMOTE}", authorising Google Drive...')
-    subprocess.run(  # nosec B603 B607
-        [
-            "rclone",
-            "config",
-            "create",
-            RCLONE_REMOTE,
-            "drive",
-            f"scope={RCLONE_DRIVE_SCOPE}",
-        ],
-        check=True,
-    )
-
-
-def upload(path: Path) -> bool:
-    snapshot = path.with_name(f".{path.stem}.upload{path.suffix}")
-    shutil.copyfile(path, snapshot)
-    try:
-        result = subprocess.run(  # nosec B603 B607
-            ["rclone", "copyto", str(snapshot), f"{RCLONE_REMOTE}:{path.name}"],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-    finally:
-        snapshot.unlink()
-    if result.returncode != 0:
-        print(f"Sync error for {path.name}: {result.stderr.strip().splitlines()[-1:]}")
-    return result.returncode == 0
-
-
-def modification(path: Path) -> tuple[int, int] | None:
-    try:
-        stat = path.stat()
-    except FileNotFoundError:
-        return None
-    return stat.st_mtime_ns, stat.st_size
-
-
-def sync_pass(paths: list[Path], synced: dict[Path, tuple[int, int]]) -> None:
-    for path in paths:
-        state = modification(path)
-        if state is not None and synced.get(path) != state and upload(path):
-            synced[path] = state
-
-
-def sync_worker(
-    paths: list[Path],
-    exit: threading.Event,
-    interval: float,
-) -> None:
-    synced: dict[Path, tuple[int, int]] = {}
-    while not exit.wait(interval):
-        sync_pass(paths, synced)
-    sync_pass(paths, synced)
-
-
 app = typer.Typer(no_args_is_help=True)
 
 
@@ -720,26 +643,8 @@ def live(
             help="Seconds between screenshots.",
         ),
     ] = 2.0,
-    sync: Annotated[
-        bool,
-        typer.Option(
-            "--sync",
-            help="Copy the transcript and screenshot to the root of Google Drive "
-            "through rclone. The first run signs in through the browser.",
-        ),
-    ] = False,
-    sync_interval: Annotated[
-        float,
-        typer.Option(
-            "--sync-interval",
-            help="Seconds between sync passes; each pass uploads only the files that "
-            "changed.",
-        ),
-    ] = 3.0,
 ) -> None:
     """Transcribe live audio and capture screenshots at an interval."""
-    if sync:
-        ensure_rclone_remote()
     sources = pulse_sources()
     exit = threading.Event()
     audio: queue.Queue[AudioChunk | None] = queue.Queue()
@@ -788,18 +693,6 @@ def live(
                 daemon=True,
             )
         )
-    sync_thread: threading.Thread | None = None
-    if sync:
-        synced_paths = ([transcript_path] if capture_devices else []) + (
-            [screenshot_path] if source in [Source.SCREEN, Source.ALL] else []
-        )
-        sync_thread = threading.Thread(
-            target=sync_worker,
-            args=(synced_paths, exit, sync_interval),
-            daemon=True,
-        )
-        threads.append(sync_thread)
-
     print("Running... (Ctrl+C to exit)")
     for thread in threads:
         thread.start()
@@ -811,7 +704,7 @@ def live(
         print("\nStopping...")
         exit.set()
         for thread in threads:
-            thread.join(timeout=SYNC_STOP_TIMEOUT if thread is sync_thread else 1)
+            thread.join(timeout=1)
     finally:
         audio.put(None)
 
@@ -1053,8 +946,6 @@ class TestSpeechGate:
 
 # Frequently used:
 #   uv run transcriptor.py live --source all
-# Copy to the root of Google Drive as it records:
-#   uv run transcriptor.py live --source all --sync
 # Pick devices:
 #   uv run transcriptor.py devices
 #   uv run transcriptor.py live --microphone-device N --speaker-device M
