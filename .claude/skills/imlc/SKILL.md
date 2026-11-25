@@ -1,33 +1,29 @@
 ---
 name: imlc
-description: What to say and type in a mock ML/AI coding interview at Google (45 minutes, PyTorch or NumPy), from a task summary passed in by the user. Use when the user sends "imlc".
+description: One-pager answer to an ML/AI coding interview question (45 minutes, PyTorch or NumPy), from a task summary passed in by the user. Use when the user sends "imlc".
 ---
 
-You are prompting a candidate through a mock ML/AI coding interview at Google, 45 minutes,
-in Python, with a shared editor. From the task in the summary passed to you, give them what
-to say and type.
+From the task in the summary passed with the message that invokes this skill, write a
+one-pager answer: clarifications, the maths, approaches, runnable code, tests and complexity
+on a single page. The answer begins with the QUESTION line taken from the summary.
 
-This is a practice session: a mock exam, not a real one. The task arrives as a summary passed
-with the message that invokes this skill. Your answer begins with the QUESTION line taken
-from the summary.
-
-This round is not the algorithms round. It asks him to implement a machine learning
-primitive from scratch and it is scored on five things:
+This interview type is a 45-minute ML/AI coding interview in Python, in a shared editor. It
+is not the algorithms interview type. It asks for a machine learning primitive implemented
+from scratch, and it is scored on five things:
 - THE MATHS IS RIGHT. The gradient, the normalisation, the distance, the update rule.
-- IT IS VECTORISED. Looping over samples or features in Python is the defect this round
-  exists to find. The only acceptable Python loops are over training iterations, over
+- IT IS VECTORISED. Looping over samples or features in Python is the defect this interview
+  type exists to find. The only acceptable Python loops are over training iterations, over
   layers, or over k in k-means - never over rows of data.
 - IT IS NUMERICALLY STABLE. Subtract the max before exponentiating, in softmax and in the
   sigmoid alike - a sigmoid written as 1/(1+exp(-z)) overflows on large negative z, so clip z
   or branch on its sign. Never take a log or divide without a guard. Say "overflow" once.
 - SHAPES ARE STATED AND CORRECT. Every array's shape is named when it appears.
-- HE CAN EXPLAIN THE DERIVATION, not just type the formula.
+- THE DERIVATION IS EXPLAINED, not just the formula typed.
 
-PYTORCH IS THE DEFAULT for this round, in tensors, because that is what the team works in
-and what was named when the loop was described. Use NumPy only when the task is a classical
-primitive with no gradients in it - k-means, k-nearest neighbours, the area under the curve -
-or when the interviewer's own code on screen is NumPy. Match what is on screen if anything is.
-Ask which they want; it is a fair clarifying question and it costs five seconds.
+PYTORCH IS THE DEFAULT for this interview type, in tensors, because that is what the team
+works in. Use NumPy only when the task is a classical primitive with no gradients in it -
+k-means, k-nearest neighbours, the area under the curve - or when code given with the task
+is NumPy. Match any code the task gives. Which one is wanted is a fair clarifying question.
 
 NEVER CALL THE LIBRARY FUNCTION THAT IS THE ANSWER. "Implement attention" does not mean
 torch.nn.MultiheadAttention, "implement layer norm" does not mean torch.nn.LayerNorm, and
@@ -36,25 +32,25 @@ arithmetic. Broadcasting, matmul, reductions, indexing and einsum are all fair.
 
 WHEN THE TASK WANTS A BACKWARD PASS, DERIVE IT BY HAND AND THEN CHECK IT AGAINST AUTOGRAD.
 Write the manual gradient, then verify it with torch.autograd.grad on the same inputs and
-assert the two agree with torch.allclose. Saying that out loud is one of the strongest moves
-available in this round: it shows he knows the maths and knows how to prove he got it right.
+assert the two agree with torch.allclose. That check is one of the strongest moves available
+in this interview type: it shows the maths is understood and proven right.
 
 Hard rules:
 
 - THE CODE MUST RUN AS WRITTEN. Complete, no pseudocode, no ellipses, no TODO, no helper
-  left unimplemented. If he types it verbatim it passes the tests you give it.
+  left unimplemented. Copied verbatim, it passes the tests given with it.
 - The asserts in TEST must pass against the code in CODE exactly as both are written. Use
   torch.allclose or numpy.allclose for anything floating point, never == on floats. Build
   tensors with an explicit dtype of torch.float64 in tests, so tolerances are not the reason
   a correct implementation looks wrong.
 - CODE CONTAINS PYTHON AND NOTHING ELSE. Not one prose line, not a shape note, not a stray
-  heading. A sentence about shapes sitting between two statements is a syntax error and he
-  will paste it. Shapes are said out loud, in WALK.
+  heading. A sentence about shapes sitting between two statements is a syntax error once
+  copied. Shapes are stated in WALK.
 - EVERY IMPORT GOES AT THE TOP OF CODE, AT MODULE LEVEL, never inside a function. TEST runs
   at module level and needs the same names.
 - Plain text only. No markdown: no asterisks, no backticks, no fences, no "#" headings.
   Indentation inside CODE is real Python indentation and must be preserved.
-- No comments in the code. The WALK lines are what he says out loud instead.
+- No comments in the code. The WALK lines carry the explanation instead.
 - Prose lines stand alone and stay under 20 words. Code lines are exempt.
 - EXPAND EVERY ACRONYM AT FIRST USE: "SGD (stochastic gradient descent)", "MLP (multi-layer
   perceptron)", "AUC (area under the curve)". Do not gloss NumPy, PyTorch, API, CPU, GPU.
@@ -67,48 +63,45 @@ Walk the code line by line with those exact arrays, carrying real shapes and rea
 and write down what it returns. Compare against the expected value. If they differ, one of
 them is wrong: fix the maths if the algorithm is wrong, fix the expected value if you
 computed it carelessly. An assert that fails against your own code is the worst defect this
-sheet can have, because he types both halves.
+one-pager can have, because both halves get copied as written.
 Then check: every acronym expanded, no comments in the code, nothing used that is not
 defined in CODE or TEST, and no Python loop over rows of data.
 
-Begin with this line in every case:
+Begin with this line:
 
 QUESTION: <the task in one line, as in the summary>
 
-If the summary has no task yet, say so on that line and stop there.
+If the summary holds no task, say so on that line and stop there.
 
-If the summary is of a follow-up type - extending the primitive, asking for the backward
-pass, asking to remove a loop, or pointing at a bug - answer only that: one uppercase
-heading of your own, the revised code, and the new complexity. Omit everything else.
-
-Otherwise use exactly this shape:
+Then use exactly this shape:
 
 QUESTION: <as above>
 
-CLARIFY (0-4)
-<3 questions to ask out loud: PyTorch or NumPy, the input shapes, and what this task is
-actually ambiguous about - batched or single, which convention, what to return>
-<then one line: "if deflected, assume:" plus the assumptions, together>
+CLARIFY
+<3 questions this task needs settled: PyTorch or NumPy, the input shapes, and what this task
+is actually ambiguous about - batched or single, which convention, what to return>
+<then one line: "assume:" plus the assumptions the answer proceeds on, together>
 
-MATH (4-10)
+MATH
 <the formula being implemented, in words plus symbols, on 2-3 lines>
 <the derivative or update rule if the task needs one, and where it comes from>
 <the one term that is easy to get wrong here>
 
-APPROACHES (10-14)
+APPROACHES
 <the naive loop version in one line, with its complexity>
 <the vectorised version in one line, with its complexity and its memory cost>
 <the pick and why - and if the vectorised one allocates too much, say at what size>
 
-CODE (14-30)
-<imports first, then complete runnable NumPy with a type-hinted signature, no comments>
+CODE
+<imports first, then complete runnable PyTorch or NumPy with a type-hinted signature, no
+comments>
 <Python only - every word about shapes belongs in WALK, not here>
 
-WALK (30-34)
-<4 lines to say while typing: the shape of each intermediate, why this axis, where the
+WALK
+<4 lines explaining the code: the shape of each intermediate, why this axis, where the
 stability guard goes, and the one line that carries the actual maths>
 
-TEST (34-40)
+TEST
 <first a TRACE line: a tiny concrete input, the intermediate arrays with their numbers, and
 the returned value - write it out, do not summarise it>
 <then asserts against the code above. NEVER assert a hand-computed float that falls out of
@@ -116,8 +109,8 @@ an iterative procedure - what gradient descent returns after 100 steps, or where
 converges, cannot be computed in your head and the assert will be wrong. Verify by property
 instead, and prefer these in order:
  1. cross-check: write a four-line naive loop reference inside TEST and assert the vectorised
-    function matches it with numpy.allclose. This is the strongest check and it is what he
-    should say he would do.
+    function matches it with numpy.allclose. This is the strongest check and the one worth
+    naming as the verification strategy.
  2. gradient check: for anything returning gradients, compare against torch.autograd.grad on
     the same inputs, or perturb one entry by 1e-5 and compare the numerical difference.
  3. closed form: softmax of equal logits is uniform; k-means with k equal to n puts each
@@ -134,9 +127,5 @@ Include one overflow case, such as logits of 1000, and one degenerate case. Ever
 the asserts use is defined inside TEST.>
 <one line naming the bug this code is most likely to have, and what would catch it>
 
-COMPLEXITY (40-42)
+COMPLEXITY
 <time and memory in big-O over the named dimensions, and what dominates>
-
-FOLLOW-UPS (42-45)
-<the 2 follow-ups this invites - usually the backward pass, batching, or the numerical
-edge case - each with a one-line answer>

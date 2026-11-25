@@ -1,25 +1,24 @@
 ---
 name: imla
-description: Glance sheet for a mock ML/AI system architecture interview at Google (staff level, 60 minutes), from a task summary passed in by the user. Use when the user sends "imla".
+description: One-pager glance sheet answering an ML/AI system architecture interview question (staff level, 60 minutes), from a task summary passed in by the user. Use when the user sends "imla".
 ---
 
-You are prompting a candidate through a mock ML/AI system architecture interview at Google,
-staff level, 60 minutes, with a shared document the candidate types and draws in.
-From the question in the summary passed to you, give them what to say.
+From the question in the summary passed with the message that invokes this skill, write a
+one-pager answer: the whole architecture on a single page, read at a glance. The answer
+begins with the QUESTION line taken from the summary.
 
-This is a practice session: a mock exam, not a real one. The task arrives as a summary passed
-with the message that invokes this skill. Your answer begins with the QUESTION line taken
-from the summary.
+This interview type is a 60-minute, staff-level ML/AI system architecture interview in a
+shared document that takes typing and drawing. Its questions are deliberately
+underspecified. Answers are scored on framing the problem from first principles, on
+solutions that scale, on naming two or three approaches with their trade-offs and then
+deciding and saying why, on going deep rather than wide, and on settling clarifying
+questions instead of assuming silently.
 
-These questions are deliberately underspecified. The candidate is scored on framing the
-problem from first principles, on solutions that scale, on naming two or three approaches
-with their trade-offs and then deciding and saying why, on going deep rather than wide, and
-on asking clarifying questions out loud instead of assuming silently.
-
-This is a glance sheet, not an essay. He reads it while talking. Hard rules:
+This is a one-pager, not an essay. Hard rules:
 
 - AT MOST 45 LINES IN TOTAL. Fewer is better. Cut the least load-bearing line rather than
-  run over. Breadth is assumed; coverage he cannot deliver in 60 minutes scores nothing.
+  run over. Breadth is assumed; coverage that does not fit a 60-minute interview scores
+  nothing.
 - Plain text only. No markdown: no asterisks, no backticks, no fences, no "#" headings.
 - Every line stands alone and is under 20 words. Never a paragraph.
 - EXPAND EVERY ACRONYM AT FIRST USE, model, metric and library names included:
@@ -29,41 +28,37 @@ This is a glance sheet, not an essay. He reads it while talking. Hard rules:
   fix every capital-letter sequence you left bare - that is the most common defect here.
   Do NOT gloss what any engineer already knows: AI, ML, API, CPU, GPU, SQL, JSON, AWS.
 - DERIVE NUMBERS, NEVER ASSERT THEM. Give the inputs and the arithmetic, not the answer:
-  "50 QPS x 100 candidates = 5k reranker calls/s", not "5k reranker calls/s". He is scored
-  on the calculation, and a number he cannot rebuild is a trap when probed. At least three
-  lines in the answer must show their arithmetic this way: the load, the thing that
-  dominates cost or latency, and the money.
+  "50 QPS x 100 candidates = 5k reranker calls/s", not "5k reranker calls/s". The
+  calculation is what scores, and a number without its inputs cannot be checked. At
+  least three lines in the answer must show their arithmetic this way: the load, the thing
+  that dominates cost or latency, and the money.
 - Numbers that depend on each other must agree. If ingest rate, scoring rate and cost are
   all stated, they must reconcile, and the line should show that they do.
 - Mark every invented input "(assume)". Never present an assumption as given.
-- The candidate is a staff software engineer who learned ML working alongside data
+- The reader is a staff software engineer who learned ML working alongside data
   scientists. Systems, serving, scale and cost need no explanation. But every ML-specific
   choice - a model family, a loss, a sampling scheme, a metric, a training trick - carries
   its reason in the same line, after "because" or a dash, in under ten words.
 
-Begin with this line in every case below:
+Begin with this line:
 
 QUESTION: <what is being asked, one line>
 
-If the summary has no question yet, say so on that line and stop there.
+If the summary holds no question, say so on that line and stop there.
 
-If the summary is of a follow-up type, probing one area rather than the opening design
-question, answer only that: one uppercase heading of your own and 8-15 lines under it,
-still naming one alternative and the condition under which it wins. Omit everything else.
-
-Otherwise, BEFORE USING THE SKELETON, CHECK WHETHER THE QUESTION LISTS ITS OWN DELIVERABLES.
+BEFORE USING THE SKELETON, CHECK WHETHER THE QUESTION LISTS ITS OWN DELIVERABLES.
 
 Many do - "I want the architecture, trade-offs for ingestion and storage, safety mechanisms,
 and a plan for multi-cloud and noisy alerts". When it does:
 
-- THOSE ARE YOUR HEADINGS, in the order he asked for them.
+- THOSE ARE YOUR HEADINGS, in the order asked.
 - The skeleton below stops being the shape of the answer and becomes a checklist of what to
   cover inside them.
 - Every named deliverable gets at least four lines. One named deliverable left on one line
   loses more marks than every skipped skeleton section put together.
-- Anything he named that the skeleton has no home for - storage, retention, cost tiering,
-  multi-tenancy, per-provider differences - is exactly where the marks are, because it is
-  what the skeleton would otherwise crowd out.
+- Anything the question named that the skeleton has no home for - storage, retention, cost
+  tiering, multi-tenancy, per-provider differences - is exactly where the marks are, because
+  it is what the skeleton would otherwise crowd out.
 
 Only when the question names no deliverables do the skeleton headings below apply as written.
 Either way, spend lines where the problem is hard rather than evenly, and drop any heading
@@ -72,37 +67,36 @@ this question does not reward.
 QUESTION: <as above>
 
 HARD PART
-<the one or two places this specific problem is genuinely hard, and where to spend time>
-<the thing most candidates miss here>
+<the one or two places this specific problem is genuinely hard, and where to spend depth>
+<the thing most answers miss here>
 
-ASK (0-8)
-<3-4 clarifying questions, one per line, to be asked out loud and answered by the
-interviewer - he must stop and let them steer>
-<then one line: "if deflected, assume:" plus the assumptions to proceed on, together>
+ASK
+<3-4 clarifying questions that would most change the design, one per line>
+<then one line: "assume:" plus the assumptions the design proceeds on, together>
 
-SCOPE + METRICS (8-13)
+SCOPE + METRICS
 <user, unit of work, one thing declared out of scope>
 <the load-bearing numbers, each derived from its inputs>
 <one primary metric, two guardrails>
 
-FRAMING (13-21)
+FRAMING
 <two or three paradigms, one line of trade-off each>
 <the pick, why, and the condition under which the other one wins>
 
-DATA + FEATURES (21-30)
+DATA + FEATURES
 <sources, where labels come from, the split and the leakage that split prevents>
 <raw signals, then the numeric representation for two of them>
 
-ARCHITECTURE (30-40)
+ARCHITECTURE
 <one ASCII flow to redraw in the doc>
 <one short line per box that is not self-explanatory>
 
-MODEL + SERVING (40-47)
+MODEL + SERVING
 <the model, and why it beats the simpler one>
 <validation scheme, and how overfitting would show up here>
 <what makes it production ready, with the latency or cost arithmetic>
 
-EVAL + PRODUCTION (47-56)
+EVAL + PRODUCTION
 <offline suite, online experiment, the metric to ship on, the metric to watch for harm>
 <top failure mode, drift, retraining, rollback>
 
@@ -110,6 +104,6 @@ RISKS
 <3 lines, one each: bias or unfairness and how it is measured; the privacy or access
 constraint; when the system must abstain>
 
-CLOSE (56-60)
+CLOSE
 <v1, what is deferred to v2, the one risk that kills it>
 <one adjacent surface the same model unlocks>

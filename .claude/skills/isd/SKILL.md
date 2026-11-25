@@ -1,30 +1,25 @@
 ---
 name: isd
-description: Glance sheet for a mock system design interview at Google (staff level, 60 minutes), from a task summary passed in by the user. Use when the user sends "isd".
+description: One-pager glance sheet answering a system design interview question (staff level, 60 minutes), from a task summary passed in by the user. Use when the user sends "isd".
 ---
 
-You are prompting a candidate through a mock system design interview at Google, staff level,
-60 minutes, with a shared document the candidate types and draws in.
-From the question in the summary passed to you, give them what to say.
+From the question in the summary passed with the message that invokes this skill, write a
+one-pager answer: the whole design on a single page, read at a glance. The answer begins
+with the QUESTION line taken from the summary.
 
-This is a practice session: a mock exam, not a real one. The task arrives as a summary passed
-with the message that invokes this skill. Your answer begins with the QUESTION line taken
-from the summary.
+This interview type is a 60-minute, staff-level system design interview in a shared document
+that takes typing and drawing. It scores framing an underspecified prompt, decomposing it,
+going deep where it is hard, naming trade-offs and committing, and production thinking about
+failure.
 
-This round scores framing an underspecified prompt, decomposing it, going deep where it is
-hard, naming trade-offs and committing, production thinking about failure, and treating it
-as a conversation rather than a presentation.
+THE ONE-PAGER MUST HOLD THE WHOLE DESIGN. There is no second pass, so everything a well
+designed system needs is here, in few words, rather than some of it at length.
 
-THE FIRST ANSWER MUST HOLD THE WHOLE DESIGN. What is missing from it the interviewer
-extracts later through probes, and every probe he needs to extract it is scored against him.
-So everything a well designed system needs is here from the start, in few words, rather than
-some of it at length.
-
-THE GOOGLE-SPECIFIC RULE, WHICH OUTRANKS EVERY SYSTEM DESIGN HABIT HE HAS:
+THE MECHANISM-OVER-PRODUCT RULE, WHICH OUTRANKS EVERY SYSTEM DESIGN HABIT:
 Explain how a component works; do not name the product that provides it. "A log with
 per-partition offsets so consumers replay independently" scores; "use Kafka" does not, and
-invites the question he cannot answer. When a product name is genuinely the clearest label,
-it arrives with the mechanism in the same line.
+invites a question the answer cannot back up. When a product name is genuinely the clearest
+label, it arrives with the mechanism in the same line.
 
 WHAT A STRONG ANSWER CONTAINS, AND WEAK ANSWERS BURY OR LEAVE OUT:
 - THE EXPECTED MECHANISM, NAMED EARLY. Most classic questions have one core mechanism the
@@ -32,7 +27,7 @@ WHAT A STRONG ANSWER CONTAINS, AND WEAK ANSWERS BURY OR LEAVE OUT:
   rate limiting, consistent hashing with virtual nodes for a cache, counter ranges for short
   codes, leases with fencing tokens for a scheduler. Name the naive design it replaces (a
   stored mapping, a batch job, a scan, a lock, a per-request remote call) and why it loses,
-  in one line, because that naive design is exactly what he will be pushed back on.
+  in one line, because that naive design is exactly what the interviewer will push back with.
 - THE PROPERTIES THAT MECHANISM BUYS, ONE PER LINE. They are what scores, not its name: what
   stays stable with nothing stored, what happens when a parameter grows (does everyone
   already in stay in), what work is needed when entities are created or deleted (ideally
@@ -58,19 +53,20 @@ WHAT A STRONG ANSWER CONTAINS, AND WEAK ANSWERS BURY OR LEAVE OUT:
 - GOVERNANCE THE PROBLEM IMPLIES: audit log, ownership, access control. Designed in with one
   line, never deferred.
 
-Hard rules - he reads this while talking:
+Hard rules - the one-pager is read at a glance:
 
 - AT MOST 24 LINES OF CONTENT, headings excluded. Cut the least load-bearing line rather
-  than run over. A line that every candidate would say scores nothing: cut it first.
+  than run over. A line that any answer would contain scores nothing: cut it first.
 - Plain text only. No markdown: no asterisks, no backticks, no fences, no "#" headings.
 - Every line stands alone and is under 20 words, the QUESTION line excepted. Never a
   paragraph. A line over 20 words is two ideas - split it or cut one.
-- WRITE THE CONTENT, NOT ITS CATEGORY. The names above are for you, not for him: no line
-  starts with "Naive design:", "Expected mechanism:", "Properties:", "Hot spot:",
-  "Self-inflicted failure:", "Fallback chain:" or "Trade-off:". "Stored user-to-flag table:
-  rewritten on every rollout" says it in the words the label would have cost.
-- NO CAPACITY ESTIMATES. Request rates, storage and machine counts depend on what the
-  interviewer says and cost lines the design needs. State a number only where it is a
+- WRITE THE CONTENT, NOT ITS CATEGORY. The names above are for writing the page, not for
+  the page itself: no line starts with "Naive design:", "Expected mechanism:", "Properties:",
+  "Hot spot:", "Self-inflicted failure:", "Fallback chain:" or "Trade-off:". "Stored
+  user-to-flag table: rewritten on every rollout" says it in the words the label would have
+  cost.
+- NO CAPACITY ESTIMATES. Request rates, storage and machine counts depend on details the
+  question leaves open and cost lines the design needs. State a number only where it is a
   requirement - a latency target, a propagation deadline, a size that decides whether
   something fits in memory - and mark it "(assume)" right after the number when invented.
 - EXPAND EVERY ACRONYM AT FIRST USE: "WAL (write-ahead log)", "CDC (change data capture)".
@@ -85,29 +81,22 @@ LAST, BEFORE YOU ANSWER, RUN THESE CHECKS OVER YOUR OWN DRAFT:
 4. Each point above that this problem has is present - a missing one costs more than any
    line you would cut to make room for it.
 
-Begin with this line in every case below:
+Begin with this line:
 
 QUESTION: <what is being asked, one line>
 
-If the summary has no question yet, say so on that line and stop there.
+If the summary holds no question, say so on that line and stop there.
 
-If the summary is of a follow-up type, probing one area rather than the opening design
-question, answer only that: one uppercase heading of your own and AT MOST 8 LINES under it,
-every line under 20 words exactly as above, no blank lines between them. The first answer
-already held the whole design, so this goes one layer deeper on the probed area and repeats
-nothing it said. Still name one alternative and the condition under which it wins. Omit
-everything else.
-
-Otherwise, IF THE QUESTION LISTS ITS OWN DELIVERABLES, those are the headings, in the order
-he asked for them, and the skeleton below becomes a checklist of what to cover inside them.
+IF THE QUESTION LISTS ITS OWN DELIVERABLES, those are the headings, in the order
+asked, and the skeleton below becomes a checklist of what to cover inside them.
 
 Otherwise use this skeleton, dropping any heading this question does not reward:
 
 QUESTION: <as above>
 
 ASK
-<2-3 questions to ask out loud and let the interviewer answer, then one line: "if
-deflected, assume:" plus the assumptions to proceed on, together>
+<2-3 questions that would most change the design, then one line: "assume:" plus the
+assumptions the design proceeds on, together>
 
 CORE
 <the naive design and why it loses, then the expected mechanism>
